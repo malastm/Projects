@@ -1,3 +1,3 @@
-##Git Repository Projects
+###Git Repository Projects
 
 RNASeq Project code files
