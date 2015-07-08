@@ -31,55 +31,29 @@ r.library("edgeR")
 r('data<-read.csv("/home/tareq/Documents/leid/Work/RNASeq_TranCyst/Project/CountTable/gene_counts.csv", row.names = 1, header = TRUE)')
 r('nf <- calcNormFactors(data)')
 r('y <- voom(data, plot=FALSE, lib.size=colSums(data)*nf)')
-r('datacpm  <- rowSums(cpm(y) >= 2) > 39') ## Filter on Cpm where 2 in more than 50% of samples
-r('data2 <- y[datacpm,]')
+r('datacpm  <- rowSums(cpm(data) >= 2) > 39') ## Filter on Cpm where 2 in more than 50% of samples
+r('datar <- y[datacpm,]')
 #r('data2[,-1]<-round(data2[,-1],3)')
-#r('write.table(data2, file="/home/tareq/Documents/leid/Work/RNASeq_TranCyst/Project/CountTable/gene_counts_n2.csv", sep = "\t")')
+#r('write.table(datar, file="/home/tareq/Documents/leid/Work/RNASeq_TranCyst/Project/CountTable/gene_counts_n2.csv", sep = "\t")')
 
 
-## Connect to biomaRt
+## Read biomaRt DB into R
 
-biomaRt = importr('biomaRt')
-getBM = biomaRt.getBM
-useMart = biomaRt.useMart
+biomartDB = r('biomartDB <- read.csv("/home/tareq/Documents/leid/Work/RNASeq_TranCyst/biomArt_results2.csv", header = TRUE) ')
 
-ensembl = useMart("ensembl",dataset="mmusculus_gene_ensembl") ## Database selection
-
-genesTotal = r('rownames(data2)')   ### Genes names
-
-
-r('library(biomaRt)')
-r('ensembl = useMart("ensembl",dataset="mmusculus_gene_ensembl")')   
-arry = []
-
-for ii in range (0, len(genesTotal)+1):
-	if len(arry) == 10000:  ## limit (genes) for biomaRt per connection   ## Check the DB version to be the same used when creating the count table
-		genes = robjects.StrVector(arry)
-		attr= robjects.StrVector(["ensembl_gene_id","external_gene_name", "description"])
-		print getBM(attributes=attr, filters ="ensembl_gene_id", values = genes, mart =ensembl)
-		arry = []
-	else:
-		arry.append(genesTotal[ii])
-
-print "finished all genes"
 
 ## Read experimental design
-
-  
-
 
 for file in os.listdir(sys.argv[1]):
 	if file.find("csv") >=0 and file.find("lock")<0:
 		r.library("limma")
-		#data = r(' datar <- read.table("/home/tareq/Documents/leid/Work/RNASeq_TranCyst/Project/CountTable/gene_counts_n2.csv", header = TRUE , row.names = 1)')
-		r('datar<- data2')
-		print r('colnames(datar)')
+		#print r('colnames(datar)')
 		#print r('rownames(datar)')
 		targets_path = "targets <- read.table(" + '"' + sys.argv[1]  + "/" + file + '"' + ', header = TRUE)'	
 		targets = r(targets_path)
 		targets_sorted = r('targets.sort<-targets[order(targets[,1]),]') ## Sort by sample id
 		r('rownames(targets.sort) <- targets.sort[,1]')## Change column names 
-		print r('targets.sort[,1]')
+		#print r('targets.sort[,1]')
 		data_selected = r('  datar_selected <- datar[, rownames(targets.sort)]') ## Select data from the complete counts table
 		#print r('datar_selected')
 		targetsNames =  r('colnames(targets.sort)')
@@ -93,7 +67,7 @@ for file in os.listdir(sys.argv[1]):
 				x = x + "targets.sort$" + item + ", "
 
 		x  = "TS <- " + x + 'sep="_")'
-		print x
+		#print x
 		TS = r(x)  
 		r('TS1 <- factor(TS, levels=c(unique(TS)))')
 		r('design2 <- model.matrix(~0+TS1)')
@@ -129,11 +103,11 @@ for file in os.listdir(sys.argv[1]):
 		os.system(command)
 		### Write the output of each contrast in its file
 	 	for ii in range (0, contrastsAll.count(',')):
-			print contrastsAll.split(",")[ii].strip().split("=")[0]
+			#print contrastsAll.split(",")[ii].strip().split("=")[0]
 		
 			toptable = 'toptable <- topTable(fit2e, number=nrow(datar_selected), adjust="fdr", ' + str(ii + 1) + ")"
 			contrastOut = r(toptable)
-			print contrastOut
+			#print contrastOut
 			sum1 = 'sum(toptable$adj.P.Val<=  ' + str(pvalue) + ')'
 			filter1 =' filter1 <- toptable[toptable$adj.P.Val<  ' + str(pvalue) + ", ]"   ## Filter based on adj.pvalue
 			r(filter1)
@@ -141,50 +115,41 @@ for file in os.listdir(sys.argv[1]):
 
 			directions = ["up", "down"]
 		
-			### Retrieve gene id using BiomaRt 
-			r('library(biomaRt)')
-			r('ensembl = useMart("ensembl",dataset="mmusculus_gene_ensembl")')
+			### Retrieve gene id using BiomaRt local DB 
 			for item in directions:
 				if item =="up":
 					filter2 =' filter2 <- filter1[filter1$logFC >=0 , ]'   ## Filter based on logFC sign.
 					r(filter2)
-					#print r('filter2')
-					#print r(sum1)
-
+					genes = r('genes <- rownames(filter2)')
 					output = 'write.table(filter2,  ' + '"' + sys.argv[1] + "/" + file.split(".")[0]+ '/' + contrastsAll.split(",")[ii].strip().split("=")[0].strip() + '_Up.txt", sep="\t")'
 					r(output)
-					genes = r('genes <- rownames(filter2)')
 					r('filter2 <- cbind(ensembl_gene_id = rownames(filter2), filter2)')
 					r('rownames(filter2) <- NULL')
-					r('ensembl = useMart("ensembl",dataset="mmusculus_gene_ensembl")')
 
 					if len(genes)>0:					
-						print genes
-						r('result <- getBM(attributes=c("ensembl_gene_id","external_gene_name", "description"), filters ="ensembl_gene_id", values = genes, mart =ensembl)')
-						#print r('result')
-						r('total <- merge(filter2,result,by="ensembl_gene_id")')
-						output = 'write.table(total,  ' + '"' + sys.argv[1] + "/" + file.split(".")[0]+ '/' + contrastsAll.split(",")[ii].strip().split("=")[0].strip() + '_Up_edited.txt", sep="\t")'
+						r('total <- merge(filter2,biomartDB,by="ensembl_gene_id")')
+						r('total <-total[ order(-total[,4]), ]')    ### Sort by adj. Pvalue
+						r('rownames(total) <- NULL')
+						output = 'write.table(total,  ' + '"' + sys.argv[1] + "/" + file.split(".")[0]+ '/' + contrastsAll.split(",")[ii].strip().split("=")[0].strip() + '_Up_edited.txt", sep="\t", col.names=NA)'
 						r(output)
-				
 				else:
+					
+
 					filter2 =' filter2 <- filter1[filter1$logFC <0 , ]'   ## Filter based on logFC sign.
 					r(filter2)
-					#print r('filter2')
-
-
+					genes = r('genes <- rownames(filter2)')
 					output = 'write.table(filter2,  ' + '"' + sys.argv[1] + "/" + file.split(".")[0]+ '/' + contrastsAll.split(",")[ii].strip().split("=")[0].strip() + '_Down.txt", sep="\t")'
 					r(output)
-					genes = r('genes <- rownames(filter2)')
 					r('filter2 <- cbind(ensembl_gene_id = rownames(filter2), filter2)')
 					r('rownames(filter2) <- NULL')
-					r('ensembl = useMart("ensembl",dataset="mmusculus_gene_ensembl")')
-					if genes >0:
-						r('result <- getBM(attributes=c("ensembl_gene_id","external_gene_name", "description"), filters ="ensembl_gene_id", values = genes, mart =ensembl)')
-						#print r('result')
-						r('total <- merge(filter2,result,by="ensembl_gene_id")')
-						output = 'write.table(total,  ' + '"' + sys.argv[1] + "/" + file.split(".")[0]+ '/' + contrastsAll.split(",")[ii].strip().split("=")[0].strip() + '_Down_edited.txt", sep="\t")'
+
+					if len(genes)>0:					
+						r('total <- merge(filter2,biomartDB,by="ensembl_gene_id")')
+						r('total<- total[ order(-total[,4]), ]')    ### Sort by adj. Pvalue
+						r('rownames(total) <- NULL')
+						output = 'write.table(total,  ' + '"' + sys.argv[1] + "/" + file.split(".")[0]+ '/' + contrastsAll.split(",")[ii].strip().split("=")[0].strip() + '_Down_edited.txt", sep="\t" , col.names=NA)'
 						r(output)
-	
+				
 
 				
 

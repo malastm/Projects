@@ -52,15 +52,6 @@ r('library(biomaRt)')
 r('ensembl = useMart("ensembl",dataset="mmusculus_gene_ensembl")')   
 arry = []
 
-for ii in range (0, len(genesTotal)+1):
-	if len(arry) == 10000:  ## limit (genes) for biomaRt per connection   ## Check the DB version to be the same used when creating the count table
-		genes = robjects.StrVector(arry)
-		attr= robjects.StrVector(["ensembl_gene_id","external_gene_name", "description"])
-		print getBM(attributes=attr, filters ="ensembl_gene_id", values = genes, mart =ensembl)
-		arry = []
-	else:
-		arry.append(genesTotal[ii])
-
 print "finished all genes"
 
 ## Read experimental design
@@ -166,25 +157,6 @@ for file in os.listdir(sys.argv[1]):
 						output = 'write.table(total,  ' + '"' + sys.argv[1] + "/" + file.split(".")[0]+ '/' + contrastsAll.split(",")[ii].strip().split("=")[0].strip() + '_Up_edited.txt", sep="\t")'
 						r(output)
 				
-				else:
-					filter2 =' filter2 <- filter1[filter1$logFC <0 , ]'   ## Filter based on logFC sign.
-					r(filter2)
-					#print r('filter2')
-
-
-					output = 'write.table(filter2,  ' + '"' + sys.argv[1] + "/" + file.split(".")[0]+ '/' + contrastsAll.split(",")[ii].strip().split("=")[0].strip() + '_Down.txt", sep="\t")'
-					r(output)
-					genes = r('genes <- rownames(filter2)')
-					r('filter2 <- cbind(ensembl_gene_id = rownames(filter2), filter2)')
-					r('rownames(filter2) <- NULL')
-					r('ensembl = useMart("ensembl",dataset="mmusculus_gene_ensembl")')
-					if genes >0:
-						r('result <- getBM(attributes=c("ensembl_gene_id","external_gene_name", "description"), filters ="ensembl_gene_id", values = genes, mart =ensembl)')
-						#print r('result')
-						r('total <- merge(filter2,result,by="ensembl_gene_id")')
-						output = 'write.table(total,  ' + '"' + sys.argv[1] + "/" + file.split(".")[0]+ '/' + contrastsAll.split(",")[ii].strip().split("=")[0].strip() + '_Down_edited.txt", sep="\t")'
-						r(output)
-	
 
 				
 
